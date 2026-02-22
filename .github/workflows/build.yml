@@ -130,6 +130,7 @@ jobs:
           # 组合所有包
           # 基础包 + Luci + 常用工具
           BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus luci-app-firewall \
+          luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn luci-i18n-opkg-zh-cn \
           bash curl wget-ssl tar unzip bind-dig \
           kmod-usb-storage kmod-usb-storage-uas kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
           block-mount fdisk e2fsprogs"
