@@ -70,7 +70,20 @@ jobs:
             IB_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-imagebuilder-x86-64.Linux-x86_64.tar.xz"
           else
             VERSION="${{ github.event.inputs.luci_version }}"
+            # 尝试构建下载链接，如果版本不存在则可能失败
             IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/x86/64/openwrt-imagebuilder-${VERSION}-x86-64.Linux-x86_64.tar.xz"
+            
+            echo "正在尝试下载版本: $VERSION"
+            echo "下载地址: $IB_URL"
+          fi
+          
+          # 增加失败重试或检测逻辑
+          if ! wget -qO openwrt-ib.tar.xz "$IB_URL"; then
+             echo "Error: 无法下载 Image Builder。版本 $VERSION 可能不存在。"
+             echo "请检查 OpenWrt 官方下载站 https://downloads.openwrt.org/releases/ 确认版本号。"
+             echo "尝试回退到稳定版 23.05.5..."
+             IB_URL="https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-imagebuilder-23.05.5-x86-64.Linux-x86_64.tar.xz"
+             wget -qO openwrt-ib.tar.xz "$IB_URL"
           fi
           echo "Downloading Image Builder from $IB_URL"
           wget -qO openwrt-ib.tar.xz "$IB_URL"
