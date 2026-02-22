@@ -137,11 +137,13 @@ jobs:
 
           # 组合所有包
           # 基础包 + Luci + 常用工具
-          BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus luci-app-firewall \
+          # 注意: 移除 block-mount (可能已内置) 和 luci-app-firewall (可能与 i18n 冲突)
+          # 使用 make image 时，如果基础包里已有，再次指定有时会报错，我们精简一下
+          BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
           luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn luci-i18n-opkg-zh-cn \
           bash curl wget-ssl tar unzip bind-dig \
           kmod-usb-storage kmod-usb-storage-uas kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
-          block-mount fdisk e2fsprogs"
+          fdisk e2fsprogs"
           
           # 读取自定义包
           CUSTOM_PACKAGES=$(cat custom_packages.txt | tr '\n' ' ')
