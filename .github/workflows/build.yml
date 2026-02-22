@@ -34,8 +34,8 @@ on:
         required: false
         type: boolean
         default: false
-      enable_vm_tools:
-        description: '启用虚拟化支持 (PVE/VMware)'
+      enable_iso:
+        description: '生成 ISO 格式固件 (虚拟机/CD启动)'
         required: false
         type: boolean
         default: true
@@ -108,7 +108,7 @@ jobs:
           FIRMWARE_SIZE: ${{ github.event.inputs.firmware_size }}
           ENABLE_STORE: ${{ github.event.inputs.enable_store }}
           ENABLE_DOCKER: ${{ github.event.inputs.enable_docker }}
-          ENABLE_VM_TOOLS: ${{ github.event.inputs.enable_vm_tools }}
+          ENABLE_ISO: ${{ github.event.inputs.enable_iso }}
           ENABLE_PPPOE: ${{ github.event.inputs.enable_pppoe }}
           PPPOE_USER: ${{ github.event.inputs.pppoe_user }}
           PPPOE_PASS: ${{ github.event.inputs.pppoe_pass }}
@@ -159,9 +159,19 @@ jobs:
               BASE_PACKAGES="$BASE_PACKAGES luci-i18n-package-manager-zh-cn"
           fi
           
-          # 虚拟化支持 (PVE/QEMU Guest Agent / VMware Tools)
-          if [ "${ENABLE_VM_TOOLS}" == "true" ]; then
-             BASE_PACKAGES="$BASE_PACKAGES qemu-ga open-vm-tools"
+          # ISO 生成支持 (可选)
+          if [ "${ENABLE_ISO}" == "true" ]; then
+             # 注意：Image Builder 默认使用 .config 文件控制输出格式
+             # 我们需要追加配置到 .config 中 (Image Builder 的 .config 位于根目录或通过 make defconfig 生成)
+             # 但 Image Builder 的机制是 make image 时读取 .config
+             # 这里我们直接修改 .config (如果存在)，或者通过 make image 命令行参数传递 (不支持所有参数)
+             # 最稳妥的方式是追加到 .config
+             
+             # 确保 .config 存在
+             [ -f .config ] || touch .config
+             
+             echo "CONFIG_TARGET_IMAGES_GZIP=y" >> .config
+             echo "CONFIG_ISO_IMAGES=y" >> .config
           fi
           
           # 读取自定义包
@@ -178,7 +188,9 @@ jobs:
       - name: 整理构建产物
         run: |
           mkdir -p firmware
-          find openwrt-ib/bin/targets/x86/64 -name "*combined*" -exec cp {} firmware/ \;
+          # 查找 .img.gz (GZIP压缩的磁盘镜像) 和 .iso (ISO镜像)
+          find openwrt-ib/bin/targets/x86/64 -name "*.img.gz" -exec cp {} firmware/ \;
+          find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
           ls -lh firmware/
 
       - name: 上传构建产物
