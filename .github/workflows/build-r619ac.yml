@@ -139,6 +139,7 @@ jobs:
           # 组合所有包
           # 基础包 + Luci + 常用工具
           # R619AC 基础包: luci, uhttpd, wpad-openssl (WiFi支持), kmod-usb3
+          # 注意：需要移除默认的 wpad-basic 和 ath10k 固件以避免冲突
           BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
           luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn \
           luci-app-ttyd luci-i18n-ttyd-zh-cn \
@@ -146,6 +147,8 @@ jobs:
           bash curl wget-ssl tar unzip bind-dig \
           kmod-usb-storage kmod-usb-storage-uas kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
           block-mount fdisk e2fsprogs lsblk parted \
+          -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-basic \
+          -kmod-ath10k -ath10k-firmware-qca4019 \
           wpad-openssl kmod-ath10k-ct ath10k-firmware-qca4019-ct"
 
           # 获取当前版本
