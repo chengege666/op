@@ -8,4 +8,10 @@ if [ -z "${LAN_IP}" ]; then
 fi
 
 echo "Setting LAN IP to ${LAN_IP}..."
-sed -i "s/192.168.1.1/${LAN_IP}/g" package/base-files/files/bin/config_generate
+# Use uci-defaults for runtime configuration
+mkdir -p files/etc/uci-defaults
+cat > files/etc/uci-defaults/99-custom-ip <<EOF
+uci set network.lan.ipaddr='${LAN_IP}'
+uci commit network
+EOF
+chmod +x files/etc/uci-defaults/99-custom-ip
