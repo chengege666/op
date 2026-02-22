@@ -19,9 +19,10 @@ on:
       luci_version:
         description: 'OpenWrt 版本'
         required: true
-        default: '23.05.5'
+        default: '24.10.5'
         type: choice
         options:
+          - '24.10.5'
           - '23.05.5'
           - 'SNAPSHOT'
       enable_store:
