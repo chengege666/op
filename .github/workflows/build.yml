@@ -34,6 +34,11 @@ on:
         required: false
         type: boolean
         default: false
+      enable_vm_tools:
+        description: '启用虚拟化支持 (QEMU/VMware)'
+        required: false
+        type: boolean
+        default: true
       enable_pppoe:
         description: '启用 PPPoE 拨号配置'
         required: false
@@ -103,6 +108,7 @@ jobs:
           FIRMWARE_SIZE: ${{ github.event.inputs.firmware_size }}
           ENABLE_STORE: ${{ github.event.inputs.enable_store }}
           ENABLE_DOCKER: ${{ github.event.inputs.enable_docker }}
+          ENABLE_VM_TOOLS: ${{ github.event.inputs.enable_vm_tools }}
           ENABLE_PPPOE: ${{ github.event.inputs.enable_pppoe }}
           PPPOE_USER: ${{ github.event.inputs.pppoe_user }}
           PPPOE_PASS: ${{ github.event.inputs.pppoe_pass }}
@@ -135,16 +141,15 @@ jobs:
           fi
 
           # 组合所有包
-          # 基础包 + Luci + 常用工具
-          # 注意: 移除 block-mount (可能已内置) 和 luci-app-firewall (可能与 i18n 冲突)
-          # 使用 make image 时，如果基础包里已有，再次指定有时会报错，我们精简一下
-          # 注意: 24.10 版本可能不需要显式指定 luci-i18n-opkg-zh-cn，或者包名有变
-          # 尝试添加 luci-i18n-opkg-zh-cn，如果不成功则自动跳过
+          # 基础包 + Luci + 常用工具 + 系统管理与维护
+          # 新增: luci-app-ttyd (网页终端), luci-app-diskman (磁盘管理)
           BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
           luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn \
+          luci-app-ttyd luci-i18n-ttyd-zh-cn \
+          luci-app-diskman luci-i18n-diskman-zh-cn \
           bash curl wget-ssl tar unzip bind-dig \
           kmod-usb-storage kmod-usb-storage-uas kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
-          fdisk e2fsprogs"
+          block-mount fdisk e2fsprogs"
 
           # 获取当前版本
           VERSION="${{ github.event.inputs.luci_version }}"
@@ -152,6 +157,11 @@ jobs:
           # 24.10+ 版本的 luci-i18n-package-manager-zh-cn 替代了旧版 opkg 中文包
           if [[ "$VERSION" == "24.10."* ]] || [[ "$VERSION" == "SNAPSHOT" ]]; then
               BASE_PACKAGES="$BASE_PACKAGES luci-i18n-package-manager-zh-cn"
+          fi
+          
+          # 虚拟化支持 (QEMU Guest Agent / VMware Tools)
+          if [ "${ENABLE_VM_TOOLS}" == "true" ]; then
+             BASE_PACKAGES="$BASE_PACKAGES qemu-ga open-vm-tools"
           fi
           
           # 读取自定义包
