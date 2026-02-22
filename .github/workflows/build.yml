@@ -120,11 +120,19 @@ jobs:
           ../scripts/add_docker.sh
           ../scripts/set_pppoe.sh
           
-          # 处理 Store (特殊处理，因为需要添加 keys 和 repo)
+          # 处理 Store (改为手动下载包，避开密钥 404 问题)
           if [ "${ENABLE_STORE}" == "true" ]; then
-             echo "src/gz istore https://istore.linkease.com/repo/all/store" >> repositories.conf
-             wget --no-check-certificate -qO keys/istore.pub https://istore.linkease.com/repo/all/store/istore.pub
-             echo "luci-app-store" >> custom_packages.txt
+             echo "正在下载 iStore 离线包..."
+             mkdir -p packages
+             # 使用 wget 递归下载 ipk 文件
+             wget -r -np -nd -A "luci-app-store*.ipk,luci-lib-taskd*.ipk,taskd*.ipk,luci-lib-xterm*.ipk" -P packages https://istore.linkease.com/repo/all/store/ || true
+             
+             # 确保有文件下载下来
+             if [ "$(ls packages/*.ipk 2>/dev/null | wc -l)" -eq 0 ]; then
+                echo "Warning: iStore packages download failed!"
+             else
+                echo "luci-app-store taskd luci-lib-taskd luci-lib-xterm" >> custom_packages.txt
+             fi
           fi
 
           # 组合所有包
