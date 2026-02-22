@@ -148,11 +148,12 @@ jobs:
 
           # 组合所有包
           # 基础包 + Luci + 常用工具 + 系统管理与维护
-          # 新增: luci-app-ttyd (网页终端), luci-app-diskman (磁盘管理)
+          # 新增: luci-app-ttyd (网页终端)
+          # 注意: luci-app-diskman (磁盘管理) 非官方包，会导致构建失败，故移除。
+          # block-mount 已包含挂载点功能。
           BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
           luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn \
           luci-app-ttyd luci-i18n-ttyd-zh-cn \
-          luci-app-diskman luci-i18n-diskman-zh-cn \
           openssh-sftp-server \
           bash curl wget-ssl tar unzip bind-dig \
           kmod-usb-storage kmod-usb-storage-uas kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
