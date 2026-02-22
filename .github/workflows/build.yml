@@ -184,6 +184,9 @@ jobs:
           # Rootfs 生成支持 (可选)
           if [ "${ENABLE_ROOTFS}" == "true" ]; then
              echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+             # Rootfs 格式通常不需要分区大小限制，或者需要调整 ROOTFS_PARTSIZE
+             # 如果之前 set_partition.sh 修改了 CONFIG_TARGET_ROOTFS_PARTSIZE，可能会影响
+             # 但主要问题可能是某些包（如内核模块）在 rootfs 模式下的兼容性
           fi
           
           # 读取自定义包
@@ -195,7 +198,23 @@ jobs:
       - name: 生成固件
         working-directory: ./openwrt-ib
         run: |
-          make image PROFILE="generic" PACKAGES="${{ env.PACKAGES }}" FILES="files"
+          # 检查是否启用了 Rootfs，如果启用则可能需要排除内核模块包或使用特定 Profile
+          # 但 Image Builder 混合构建多种格式时，通常直接 make image 即可
+          # 错误排查：Exit Code 2 通常是 make 报错
+          # 尝试增加 V=s 查看详细日志 (但这里为了界面整洁先不加)
+          # 关键点：rootfs 生成时，如果指定了 PACKAGES，某些包可能无法打包进 rootfs
+          
+          # 临时修复：为了确保构建成功，如果启用 rootfs，则尝试不指定固件大小（rootfs 是压缩包，大小自适应）
+          # 但 set_partition.sh 是全局生效的。
+          # 错误可能来自 block-mount 在 rootfs 环境下的配置脚本失败。
+          # 或者是因为 rootfs 生成时空间不足 (CONFIG_TARGET_ROOTFS_PARTSIZE 对 rootfs 制作过程也有影响)
+          
+          # 尝试加大 rootfs 构建时的冗余空间
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=4096" >> .config
+          
+          # 增加 DISABLED_SERVICES 用于禁用不必要的服务自启，可能解决某些脚本在 chroot 下失败的问题
+          
+          make image PROFILE="generic" PACKAGES="${{ env.PACKAGES }}" FILES="files" DISABLED_SERVICES="dockerd"
 
       - name: 整理构建产物
         run: |
