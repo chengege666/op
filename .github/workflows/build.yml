@@ -123,7 +123,7 @@ jobs:
           # 处理 Store (特殊处理，因为需要添加 keys 和 repo)
           if [ "${ENABLE_STORE}" == "true" ]; then
              echo "src/gz istore https://istore.linkease.com/repo/all/store" >> repositories.conf
-             wget -qO keys/istore.pub https://istore.linkease.com/repo/all/store/istore.pub
+             wget --no-check-certificate -qO keys/istore.pub https://istore.linkease.com/repo/all/store/istore.pub
              echo "luci-app-store" >> custom_packages.txt
           fi
 
