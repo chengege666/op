@@ -163,28 +163,13 @@ jobs:
           CUSTOM_PACKAGES=$(cat custom_packages.txt | tr '\n' ' ')
           
           # 设置环境变量
-          # p2w_r619ac 是 R619AC 的 profile 名称 (如果不存在会自动尝试 p2w_r619ac-128m)
+          # p2w_r619ac-128m 是官方 OpenWrt 中 R619AC 的 profile 名称
           echo "PACKAGES=$BASE_PACKAGES $CUSTOM_PACKAGES" >> $GITHUB_ENV
-          echo "PROFILE=p2w_r619ac" >> $GITHUB_ENV
+          echo "PROFILE=p2w_r619ac-128m" >> $GITHUB_ENV
 
       - name: 生成固件
         working-directory: ./openwrt-ib
         run: |
-          # 尝试查找 profile
-          if ! make info | grep -q "$PROFILE"; then
-             echo "Warning: Profile '$PROFILE' not found directly."
-             # 尝试模糊匹配
-             MATCHED_PROFILE=$(make info | grep -o "p2w_r619ac.*" | head -n 1 | awk '{print $1}')
-             if [ -n "$MATCHED_PROFILE" ]; then
-                echo "Found matching profile: $MATCHED_PROFILE"
-                PROFILE="$MATCHED_PROFILE"
-             else
-                echo "Error: Could not find a valid profile for R619AC."
-                make info
-                exit 1
-             fi
-          fi
-          
           make image PROFILE="$PROFILE" PACKAGES="$PACKAGES" FILES="files"
 
       - name: 整理构建产物
