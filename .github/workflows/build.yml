@@ -217,11 +217,17 @@ jobs:
       - name: 整理构建产物
         run: |
           mkdir -p firmware
-          # 仅复制 img.gz 和 iso 文件
-          # 排除 rootfs.img.gz (非 combined 镜像)
-          find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
-          find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
-          find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
+          
+          if [ "${ENABLE_ISO}" == "true" ]; then
+             echo "ISO 模式已启用，仅保留 ISO 文件..."
+             find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
+          else
+             echo "常规模式，保留 img.gz 文件..."
+             # 排除 rootfs.img.gz (非 combined 镜像)
+             find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
+             # 如果是 rootfs 模式，保留 tar.gz
+             find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
+          fi
           
           cd firmware
           ls -lh
