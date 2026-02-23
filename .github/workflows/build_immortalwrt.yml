@@ -127,6 +127,20 @@ jobs:
           PPPOE_USER: ${{ github.event.inputs.pppoe_user }}
           PPPOE_PASS: ${{ github.event.inputs.pppoe_pass }}
         run: |
+          # === 智能切换软件源 ===
+          # 检查官方源连通性 (尝试访问官方下载站)
+          echo "正在检查官方软件源连通性..."
+          # 使用 curl 测试连接 (5秒超时，只请求 HEAD)
+          if curl -s --head --fail --connect-timeout 5 "https://downloads.immortalwrt.org/" > /dev/null; then
+             echo "官方源连接正常，使用官方源构建。"
+          else
+             echo "官方源连接失败或响应慢，自动切换至 SJTUG 镜像源..."
+             # 替换 downloads.immortalwrt.org
+             sed -i 's|https://downloads.immortalwrt.org|https://mirrors.sjtug.sjtu.edu.cn/immortalwrt|g' repositories.conf
+             # 替换可能存在的重定向域名 (如 kyarucloud.moe)
+             sed -i 's|https://immortalwrt.kyarucloud.moe|https://mirrors.sjtug.sjtu.edu.cn/immortalwrt|g' repositories.conf
+          fi
+          
           # 准备文件目录
           mkdir -p files/etc/uci-defaults
           mkdir -p keys
