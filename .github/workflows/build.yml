@@ -51,7 +51,7 @@ on:
         description: '生成 ISO 格式固件 (虚拟机/CD启动)'
         required: false
         type: boolean
-        default: true
+        default: false
       enable_pppoe:
         description: '启用 PPPoE 拨号配置'
         required: false
