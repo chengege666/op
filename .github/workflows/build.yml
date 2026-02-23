@@ -214,9 +214,6 @@ jobs:
         run: |
           mkdir -p firmware
           
-          echo "Listing all generated files for debug:"
-          ls -R openwrt-ib/bin/targets/x86/64 || true
-          
           if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
              echo "ISO 模式已启用，仅保留 ISO 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
