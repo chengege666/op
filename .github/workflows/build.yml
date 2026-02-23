@@ -217,21 +217,16 @@ jobs:
       - name: 整理构建产物
         run: |
           mkdir -p firmware
-          # 查找生成的固件
-          find openwrt-ib/bin/targets/x86/64 -name "*" -exec cp -r {} firmware/ \; 2>/dev/null || true
-          
-          # 如果目录为空，尝试更具体的查找
-          if [ -z "$(ls -A firmware)" ]; then
-             find openwrt-ib/bin/targets/x86/64 -name "*sysupgrade.bin" -exec cp {} firmware/ \;
-             find openwrt-ib/bin/targets/x86/64 -name "*factory.bin" -exec cp {} firmware/ \;
-             find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
-             find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
-          fi
+          # 仅复制 img.gz 和 iso 文件
+          find openwrt-ib/bin/targets/x86/64 -name "*.img.gz" -exec cp {} firmware/ \;
+          find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
+          find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
           
           cd firmware
           ls -lh
           
           # 打包
+          VERSION="${{ github.event.inputs.luci_version }}"
           zip -r "OpenWrt_x86_64_${VERSION}.zip" ./*
 
       - name: 上传固件 Artifact
