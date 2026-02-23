@@ -183,44 +183,12 @@ jobs:
           # cp ../config/base.config .config  <-- 错误做法，会覆盖掉内核版本信息
           cat ../config/base.config >> .config
           
-          # 2. 定义配置修改函数 (防止直接覆盖导致配置丢失)
-          set_config() {
-            local key="$1"
-            local value="$2"
-            if [[ "$value" == "y" ]]; then
-              sed -i "s/^# $key is not set/$key=y/" .config
-              sed -i "s/^$key=.*/$key=y/" .config
-              if ! grep -q "$key=y" .config; then echo "$key=y" >> .config; fi
-            else
-              sed -i "s/^$key=.*/# $key is not set/" .config
-            fi
-          }
-          
-          # 3. 根据构建类型调整 .config
-          if [[ "${BUILD_TYPE}" == *"squashfs_ext4"* ]]; then
-             echo "Applying SquashFS + EXT4 config..."
-             set_config CONFIG_TARGET_ROOTFS_SQUASHFS y
-             set_config CONFIG_TARGET_ROOTFS_EXT4FS y
-             set_config CONFIG_TARGET_ROOTFS_TARGZ n
-             set_config CONFIG_ISO_IMAGES n
-             set_config CONFIG_TARGET_ROOTFS_ISO n
-          elif [[ "${BUILD_TYPE}" == *"iso"* ]]; then
-             echo "Applying ISO config..."
-             set_config CONFIG_TARGET_ROOTFS_SQUASHFS y
-             set_config CONFIG_ISO_IMAGES y
-             set_config CONFIG_TARGET_ROOTFS_ISO y
-             set_config CONFIG_TARGET_ROOTFS_EXT4FS n
-             set_config CONFIG_TARGET_ROOTFS_TARGZ n
-          elif [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
-             echo "Applying Rootfs config..."
-             set_config CONFIG_TARGET_ROOTFS_TARGZ y
-             set_config CONFIG_TARGET_ROOTFS_SQUASHFS n
-             set_config CONFIG_TARGET_ROOTFS_EXT4FS n
-             set_config CONFIG_ISO_IMAGES n
-             set_config CONFIG_TARGET_ROOTFS_ISO n
-          else
-             echo "Error: Unknown build type: ${BUILD_TYPE}"
-             exit 1
+          # 2. 仅在需要时启用 ISO 镜像
+          # ImageBuilder 对文件系统格式有严格依赖，强制禁用默认格式会导致构建失败。
+          # 解决方案：全部构建，然后在发布阶段仅保留用户选择的格式。
+          if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
+             echo "Enabling ISO images..."
+             echo "CONFIG_ISO_IMAGES=y" >> .config
           fi
           
           # 读取自定义包
