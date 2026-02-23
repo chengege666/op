@@ -183,31 +183,45 @@ jobs:
           # cp ../config/base.config .config  <-- 错误做法，会覆盖掉内核版本信息
           cat ../config/base.config >> .config
           
-          # 2. 确定配置标识符
+          # 2. 定义配置修改函数 (防止直接覆盖导致配置丢失)
+          set_config() {
+            local key="$1"
+            local value="$2"
+            if [[ "$value" == "y" ]]; then
+              sed -i "s/^# $key is not set/$key=y/" .config
+              sed -i "s/^$key=.*/$key=y/" .config
+              if ! grep -q "$key=y" .config; then echo "$key=y" >> .config; fi
+            else
+              sed -i "s/^$key=.*/# $key is not set/" .config
+            fi
+          }
+          
+          # 3. 根据构建类型调整 .config
           if [[ "${BUILD_TYPE}" == *"squashfs_ext4"* ]]; then
-             CONFIG_FILE="squashfs_ext4.config"
+             echo "Applying SquashFS + EXT4 config..."
+             set_config CONFIG_TARGET_ROOTFS_SQUASHFS y
+             set_config CONFIG_TARGET_ROOTFS_EXT4FS y
+             set_config CONFIG_TARGET_ROOTFS_TARGZ n
+             set_config CONFIG_ISO_IMAGES n
+             set_config CONFIG_TARGET_ROOTFS_ISO n
           elif [[ "${BUILD_TYPE}" == *"iso"* ]]; then
-             CONFIG_FILE="iso.config"
+             echo "Applying ISO config..."
+             set_config CONFIG_TARGET_ROOTFS_SQUASHFS y
+             set_config CONFIG_ISO_IMAGES y
+             set_config CONFIG_TARGET_ROOTFS_ISO y
+             set_config CONFIG_TARGET_ROOTFS_EXT4FS n
+             set_config CONFIG_TARGET_ROOTFS_TARGZ n
           elif [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
-             CONFIG_FILE="rootfs.config"
+             echo "Applying Rootfs config..."
+             set_config CONFIG_TARGET_ROOTFS_TARGZ y
+             set_config CONFIG_TARGET_ROOTFS_SQUASHFS n
+             set_config CONFIG_TARGET_ROOTFS_EXT4FS n
+             set_config CONFIG_ISO_IMAGES n
+             set_config CONFIG_TARGET_ROOTFS_ISO n
           else
              echo "Error: Unknown build type: ${BUILD_TYPE}"
              exit 1
           fi
-          
-          # 3. 清理潜在冲突的配置项
-          # 注意：为了让配置文件中的 "is not set" 生效，必须先移除 .config 中已存在的对应项
-          sed -i '/CONFIG_TARGET_ROOTFS_SQUASHFS/d' .config
-          sed -i '/CONFIG_TARGET_ROOTFS_EXT4FS/d' .config
-          sed -i '/CONFIG_TARGET_ROOTFS_TARGZ/d' .config
-          sed -i '/CONFIG_ISO_IMAGES/d' .config
-          
-          # 4. 追加特定配置并应用
-          echo "Applying config: ${CONFIG_FILE}"
-          cat "../config/${CONFIG_FILE}" >> .config
-          
-          # 5. 规范化配置
-          # make defconfig  <-- ImageBuilder 不支持 defconfig，且已通过 sed 清理冲突，直接构建即可
           
           # 读取自定义包
           CUSTOM_PACKAGES=$(cat custom_packages.txt | tr '\n' ' ')
