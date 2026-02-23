@@ -6,11 +6,12 @@ on:
       build_type:
         description: '固件构建类型'
         required: true
-        default: 'squashfs_ext4'
+        default: 'squashfs_ext4 (物理机/通用)'
         type: choice
         options:
-          - 'squashfs_ext4'
-          - 'rootfs'
+          - 'squashfs_ext4 (物理机/通用)'
+          - 'iso (虚拟机/光盘)'
+          - 'rootfs (容器/LXC)'
       luci_version:
         description: 'OpenWrt 版本'
         required: true
@@ -47,11 +48,6 @@ on:
         required: false
         type: boolean
         default: false
-      enable_iso:
-        description: '生成 ISO 格式固件 (虚拟机/CD启动)'
-        required: false
-        type: boolean
-        default: false
       enable_pppoe:
         description: '启用 PPPoE 拨号配置'
         required: false
@@ -78,7 +74,7 @@ jobs:
       - name: 初始化构建环境
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-setuptools python3-pyelftools zstd genisoimage
+          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-setuptools python3-pyelftools zstd genisoimage xorriso mtools
 
       - name: 获取 OpenWrt 版本
         id: get_version
@@ -92,7 +88,6 @@ jobs:
              FILE_EXT="tar.zst"
              IB_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-imagebuilder-x86-64.Linux-x86_64.${FILE_EXT}"
           else
-             # 判断版本号格式以确定文件后缀
              if [[ "$VERSION" == "24.10."* ]]; then
                 FILE_EXT="tar.zst"
              else
@@ -125,45 +120,44 @@ jobs:
           FIRMWARE_SIZE: ${{ github.event.inputs.firmware_size }}
           ENABLE_STORE: ${{ github.event.inputs.enable_store }}
           ENABLE_DOCKER: ${{ github.event.inputs.enable_docker }}
-          ENABLE_ISO: ${{ github.event.inputs.enable_iso }}
           BUILD_TYPE: ${{ github.event.inputs.build_type }}
           ENABLE_PPPOE: ${{ github.event.inputs.enable_pppoe }}
           PPPOE_USER: ${{ github.event.inputs.pppoe_user }}
           PPPOE_PASS: ${{ github.event.inputs.pppoe_pass }}
         run: |
-          # 准备文件目录
           mkdir -p files/etc/uci-defaults
           mkdir -p keys
           touch custom_packages.txt
 
-          # 执行脚本
-          chmod +x ../scripts/*.sh
-          ../scripts/set_ip.sh
-          
-          if [ "${BUILD_TYPE}" == "rootfs" ]; then
-              echo "Rootfs mode, skipping partition size setting."
-          else
-              ../scripts/set_partition.sh
-          fi
+          # 确保脚本存在并赋予执行权限
+          if ls ../scripts/*.sh 1> /dev/null 2>&1; then
+             chmod +x ../scripts/*.sh
+             [ -f ../scripts/set_ip.sh ] && ../scripts/set_ip.sh
+             
+             if [[ "${BUILD_TYPE}" != *"rootfs"* ]] && [ -f ../scripts/set_partition.sh ]; then
+                 ../scripts/set_partition.sh
+             fi
 
-          ../scripts/add_docker.sh
-          ../scripts/set_pppoe.sh
+             [ -f ../scripts/add_docker.sh ] && ../scripts/add_docker.sh
+             [ -f ../scripts/set_pppoe.sh ] && ../scripts/set_pppoe.sh
+          fi
           
-          # 处理 Store (改为手动下载包，避开密钥 404 问题)
+          # 【修复点 1】: 处理 iStore 的本地源，必须同时拉取 Packages.gz 索引并写入 repositories.conf
           if [ "${ENABLE_STORE}" == "true" ]; then
              echo "正在下载 iStore 离线包..."
              mkdir -p packages
-             # 使用 wget 递归下载 ipk 文件
-             wget -r -np -nd -A "luci-app-store*.ipk,luci-lib-taskd*.ipk,taskd*.ipk,luci-lib-xterm*.ipk" -P packages https://istore.linkease.com/repo/all/store/ || true
+             # 下载 ipk 及 对应的索引文件 (Packages, Packages.gz, Packages.sig)
+             wget -r -np -nd -A "luci-app-store*.ipk,luci-lib-taskd*.ipk,taskd*.ipk,luci-lib-xterm*.ipk,Packages,Packages.gz,Packages.sig" -P packages https://istore.linkease.com/repo/all/store/ || true
              
              if [ "$(ls packages/*.ipk 2>/dev/null | wc -l)" -eq 0 ]; then
                 echo "Warning: iStore packages download failed!"
              else
                 echo "luci-app-store taskd luci-lib-taskd luci-lib-xterm" >> custom_packages.txt
+                # 关键：向 opkg 告知本地目录，否则 make image 无法找到离线包
+                echo "src custom file://$(pwd)/packages" >> repositories.conf
              fi
           fi
 
-          # 组合所有包
           BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
           luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn \
           luci-app-ttyd luci-i18n-ttyd-zh-cn \
@@ -172,39 +166,24 @@ jobs:
           kmod-usb-storage kmod-usb-storage-uas kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
           block-mount fdisk e2fsprogs lsblk parted"
 
-          # 24.10+ 版本的 luci-i18n-package-manager-zh-cn 替代了旧版 opkg 中文包
           if [[ "$VERSION" == "24.10."* ]] || [[ "$VERSION" == "SNAPSHOT" ]]; then
               BASE_PACKAGES="$BASE_PACKAGES luci-i18n-package-manager-zh-cn"
           fi
           
-          # 确保 .config 存在
           [ -f .config ] || touch .config
           
-          # === 配置构建类型 ===
-          # 清理默认设置，避免冲突
-          sed -i '/CONFIG_TARGET_ROOTFS_TARGZ/d' .config
-          sed -i '/CONFIG_TARGET_ROOTFS_SQUASHFS/d' .config
-          sed -i '/CONFIG_TARGET_ROOTFS_EXT4FS/d' .config
-          sed -i '/CONFIG_ISO_IMAGES/d' .config
-
-          if [ "${BUILD_TYPE}" == "squashfs_ext4" ]; then
-             echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
-             echo "CONFIG_TARGET_ROOTFS_EXT4FS=y" >> .config
-             echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
-          elif [ "${BUILD_TYPE}" == "rootfs" ]; then
-             echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
-             echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
-             echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
-          fi
-
-          # ISO 生成支持 (可选)
-          if [ "${ENABLE_ISO}" == "true" ]; then
-             echo "CONFIG_ISO_IMAGES=y" >> .config
+          # 【修复点 2】: 防止没有 config 目录时 cat 抛出致命错误导致 Workflow 崩溃
+          if [ -f ../config/base.config ]; then
+             cat ../config/base.config >> .config
           else
-             echo "# CONFIG_ISO_IMAGES is not set" >> .config
+             echo "提示: 未找到 ../config/base.config，跳过追加。"
           fi
           
-          # 读取自定义包
+          if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
+             echo "Enabling ISO images..."
+             echo "CONFIG_ISO_IMAGES=y" >> .config
+          fi
+          
           CUSTOM_PACKAGES=$(cat custom_packages.txt | tr '\n' ' ')
           
           echo "PACKAGES=$BASE_PACKAGES $CUSTOM_PACKAGES" >> $GITHUB_ENV
@@ -218,21 +197,35 @@ jobs:
         run: |
           mkdir -p firmware
           
-          if [ "${ENABLE_ISO}" == "true" ]; then
+          # 增加调试信息，输出编译目录内容，方便以后排查
+          echo "=== Image Builder 输出的构建结果 ==="
+          ls -lh openwrt-ib/bin/targets/x86/64/ || true
+          echo "==================================="
+          
+          # 【修复点 3】: 兼容 OpenWrt 24.10+ 的多格式扩展名 (.tar.zst, .img.zst)
+          if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
              echo "ISO 模式已启用，仅保留 ISO 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
-          else
-             echo "常规模式，保留 img.gz 文件..."
-             # 排除 rootfs.img.gz (非 combined 镜像)
-             find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
-             # 如果是 rootfs 模式，保留 tar.gz
-             find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
+          elif [[ "${BUILD_TYPE}" == *"squashfs_ext4"* ]]; then
+             echo "常规模式，保留 .img.gz 或 .img.zst 文件..."
+             find openwrt-ib/bin/targets/x86/64 -name "*.img.*" ! -name "*rootfs*" -exec cp {} firmware/ \;
+          elif [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
+             echo "Rootfs 模式，保留 .tar.* (如 tar.gz/tar.zst) 文件..."
+             find openwrt-ib/bin/targets/x86/64 -name "*.tar.*" -exec cp {} firmware/ \;
+             # Rootfs 有时也会输出成 img，这里一并保留
+             find openwrt-ib/bin/targets/x86/64 -name "*rootfs.img*" -exec cp {} firmware/ \;
           fi
           
           cd firmware
+          echo "=== 准备打包的文件 ==="
           ls -lh
           
-          # 打包
+          # 【修复点 4】: 避免因空目录导致 zip 爆出 exit code 12。做前置拦截拦截并抛出人类可读的错误
+          if [ -z "$(ls -A .)" ]; then
+              echo "Error: 在 firmware 目录中没有找到任何文件！可能是生成失败或后缀名不匹配。"
+              exit 1
+          fi
+          
           VERSION="${{ github.event.inputs.luci_version }}"
           zip -r "OpenWrt_x86_64_${VERSION}.zip" ./*
 
