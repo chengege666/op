@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - 'squashfs_ext4'
+          - 'iso'
           - 'rootfs'
       luci_version:
         description: 'OpenWrt 版本'
@@ -44,11 +45,6 @@ on:
         default: false
       enable_docker:
         description: '启用 Docker'
-        required: false
-        type: boolean
-        default: false
-      enable_iso:
-        description: '生成 ISO 格式固件 (虚拟机/CD启动)'
         required: false
         type: boolean
         default: false
@@ -125,7 +121,6 @@ jobs:
           FIRMWARE_SIZE: ${{ github.event.inputs.firmware_size }}
           ENABLE_STORE: ${{ github.event.inputs.enable_store }}
           ENABLE_DOCKER: ${{ github.event.inputs.enable_docker }}
-          ENABLE_ISO: ${{ github.event.inputs.enable_iso }}
           BUILD_TYPE: ${{ github.event.inputs.build_type }}
           ENABLE_PPPOE: ${{ github.event.inputs.enable_pppoe }}
           PPPOE_USER: ${{ github.event.inputs.pppoe_user }}
@@ -191,17 +186,17 @@ jobs:
              echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
              echo "CONFIG_TARGET_ROOTFS_EXT4FS=y" >> .config
              echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
+             echo "# CONFIG_ISO_IMAGES is not set" >> .config
           elif [ "${BUILD_TYPE}" == "rootfs" ]; then
              echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
              echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
              echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
-          fi
-
-          # ISO 生成支持 (可选)
-          if [ "${ENABLE_ISO}" == "true" ]; then
-             echo "CONFIG_ISO_IMAGES=y" >> .config
-          else
              echo "# CONFIG_ISO_IMAGES is not set" >> .config
+          elif [ "${BUILD_TYPE}" == "iso" ]; then
+             echo "CONFIG_ISO_IMAGES=y" >> .config
+             echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
+             echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
+             echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
           fi
           
           # 读取自定义包
@@ -218,14 +213,15 @@ jobs:
         run: |
           mkdir -p firmware
           
-          if [ "${ENABLE_ISO}" == "true" ]; then
+          if [ "${BUILD_TYPE}" == "iso" ]; then
              echo "ISO 模式已启用，仅保留 ISO 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
-          else
+          elif [ "${BUILD_TYPE}" == "squashfs_ext4" ]; then
              echo "常规模式，保留 img.gz 文件..."
              # 排除 rootfs.img.gz (非 combined 镜像)
              find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
-             # 如果是 rootfs 模式，保留 tar.gz
+          elif [ "${BUILD_TYPE}" == "rootfs" ]; then
+             echo "Rootfs 模式，保留 tar.gz 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
           fi
           
