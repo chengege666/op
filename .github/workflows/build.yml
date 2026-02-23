@@ -207,7 +207,7 @@ jobs:
           cat "../config/${CONFIG_FILE}" >> .config
           
           # 5. 规范化配置
-          make defconfig
+          # make defconfig  <-- ImageBuilder 不支持 defconfig，且已通过 sed 清理冲突，直接构建即可
           
           # 读取自定义包
           CUSTOM_PACKAGES=$(cat custom_packages.txt | tr '\n' ' ')
