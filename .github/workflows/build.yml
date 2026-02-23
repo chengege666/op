@@ -6,12 +6,12 @@ on:
       build_type:
         description: '固件构建类型'
         required: true
-        default: 'squashfs_ext4'
+        default: 'squashfs_ext4 (物理机/通用)'
         type: choice
         options:
-          - 'squashfs_ext4'
-          - 'iso'
-          - 'rootfs'
+          - 'squashfs_ext4 (物理机/通用)'
+          - 'iso (虚拟机/光盘)'
+          - 'rootfs (容器/LXC)'
       luci_version:
         description: 'OpenWrt 版本'
         required: true
@@ -135,7 +135,7 @@ jobs:
           chmod +x ../scripts/*.sh
           ../scripts/set_ip.sh
           
-          if [ "${BUILD_TYPE}" == "rootfs" ]; then
+          if [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
               echo "Rootfs mode, skipping partition size setting."
           else
               ../scripts/set_partition.sh
@@ -182,17 +182,17 @@ jobs:
           sed -i '/CONFIG_TARGET_ROOTFS_EXT4FS/d' .config
           sed -i '/CONFIG_ISO_IMAGES/d' .config
 
-          if [ "${BUILD_TYPE}" == "squashfs_ext4" ]; then
+          if [[ "${BUILD_TYPE}" == *"squashfs_ext4"* ]]; then
              echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
              echo "CONFIG_TARGET_ROOTFS_EXT4FS=y" >> .config
              echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
              echo "# CONFIG_ISO_IMAGES is not set" >> .config
-          elif [ "${BUILD_TYPE}" == "rootfs" ]; then
+          elif [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
              echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
              echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
              echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
              echo "# CONFIG_ISO_IMAGES is not set" >> .config
-          elif [ "${BUILD_TYPE}" == "iso" ]; then
+          elif [[ "${BUILD_TYPE}" == *"iso"* ]]; then
              echo "CONFIG_ISO_IMAGES=y" >> .config
              echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
              echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
@@ -213,14 +213,14 @@ jobs:
         run: |
           mkdir -p firmware
           
-          if [ "${BUILD_TYPE}" == "iso" ]; then
+          if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
              echo "ISO 模式已启用，仅保留 ISO 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
-          elif [ "${BUILD_TYPE}" == "squashfs_ext4" ]; then
+          elif [[ "${BUILD_TYPE}" == *"squashfs_ext4"* ]]; then
              echo "常规模式，保留 img.gz 文件..."
              # 排除 rootfs.img.gz (非 combined 镜像)
              find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
-          elif [ "${BUILD_TYPE}" == "rootfs" ]; then
+          elif [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
              echo "Rootfs 模式，保留 tar.gz 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
           fi
