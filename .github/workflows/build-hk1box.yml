@@ -4,17 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       luci_version:
-        description: 'OpenWrt 版本'
+        description: 'OpenWrt 版本 (建议 23.05.5 或 SNAPSHOT)'
         required: true
-        default: '24.10.5'
+        default: '23.05.5'
         type: choice
         options:
-          - '24.10.5'
+          - '23.05.5'
+          - '23.05.0'
           - 'SNAPSHOT'
       lan_ip:
         description: '路由器管理地址 (LAN IP)'
         required: true
         default: '192.168.1.1'
+      enable_docker:
+        description: '是否安装 Docker'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -30,51 +36,81 @@ jobs:
       - name: 初始化环境
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-setuptools python3-pyelftools zstd
+          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext \
+          libssl-dev xsltproc rsync wget unzip python3 python3-setuptools python3-pyelftools zstd
 
       - name: 下载 Image Builder
+        id: download_ib
         run: |
           VERSION="${{ github.event.inputs.luci_version }}"
-          if [ "$VERSION" == "SNAPSHOT" ]; then
-             IB_URL="https://downloads.openwrt.org/snapshots/targets/amlogic/meson/openwrt-imagebuilder-amlogic-meson.Linux-x86_64.tar.zst"
+          
+          # 判断后缀名：24系列和SNAPSHOT用zst，23系列用xz
+          if [[ "$VERSION" == "SNAPSHOT" || "$VERSION" == "24"* ]]; then
+             FILE_EXT="tar.zst"
           else
-             IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/amlogic/meson/openwrt-imagebuilder-${VERSION}-amlogic-meson.Linux-x86_64.tar.zst"
+             FILE_EXT="tar.xz"
           fi
-          mkdir -p openwrt-ib
-          wget -qO- "$IB_URL" | tar -I zstd -xf - -C openwrt-ib --strip-components=1
 
-      - name: 配置系统与插件
+          if [ "$VERSION" == "SNAPSHOT" ]; then
+             IB_URL="https://downloads.openwrt.org/snapshots/targets/amlogic/meson/openwrt-imagebuilder-amlogic-meson.Linux-x86_64.${FILE_EXT}"
+          else
+             # 检查该版本的 amlogic 目录是否存在，防止 404
+             CHECK_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/amlogic/"
+             if ! wget --spider -q "$CHECK_URL"; then
+                echo "::error::OpenWrt 官方尚未发布 ${VERSION} 版本的 amlogic 架构！请换用 23.05.5 尝试。"
+                exit 1
+             fi
+             IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/amlogic/meson/openwrt-imagebuilder-${VERSION}-amlogic-meson.Linux-x86_64.${FILE_EXT}"
+          fi
+          
+          echo "正在下载: $IB_URL"
+          mkdir -p openwrt-ib
+          if [[ "$FILE_EXT" == "tar.zst" ]]; then
+             wget -qO- "$IB_URL" | tar -I zstd -xf - -C openwrt-ib --strip-components=1
+          else
+             wget -qO- "$IB_URL" | tar -xJf - -C openwrt-ib --strip-components=1
+          fi
+
+      - name: 配置系统参数
         working-directory: ./openwrt-ib
         run: |
-          # 1. 设置 IP 地址
+          # 1. 创建自定义设置脚本
           mkdir -p files/etc/uci-defaults
           cat <<EOF > files/etc/uci-defaults/99-custom-settings
           #!/bin/sh
+          # 设置 LAN IP
           uci set network.lan.ipaddr='${{ github.event.inputs.lan_ip }}'
           uci commit network
+          # 禁用签名检查
+          sed -i 's/option check_signature/# option check_signature/g' /etc/opkg.conf
           exit 0
           EOF
           chmod +x files/etc/uci-defaults/99-custom-settings
 
-          # 2. 定义插件列表 (针对盒子优化的精简版)
-          # 注意：去掉了 x86 专用的硬件驱动
-          BASE_PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
+          # 2. 基础软件包列表
+          PACKAGES="luci luci-base luci-ssl uhttpd uhttpd-mod-ubus \
           luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn \
           luci-app-ttyd luci-i18n-ttyd-zh-cn \
-          bash curl wget-ssl tar unzip lsblk fdisk e2fsprogs"
+          bash curl wget-ssl tar unzip lsblk fdisk e2fsprogs \
+          kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat kmod-usb-storage kmod-usb-storage-uas"
+
+          # 3. 根据输入添加 Docker
+          if [ "${{ github.event.inputs.enable_docker }}" == "true" ]; then
+             PACKAGES="$PACKAGES docker docker-compose luci-app-dockerman luci-i18n-dockerman-zh-cn"
+          fi
           
-          echo "PACKAGES=$BASE_PACKAGES" >> $GITHUB_ENV
+          echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
 
       - name: 生成 Rootfs
         working-directory: ./openwrt-ib
         run: |
           make image PROFILE="generic" PACKAGES="$PACKAGES" FILES="files"
           
-          # 将生成的 rootfs 准备好交给打包工具
+          # 提取生成的 rootfs 压缩包供后续打包使用
           mkdir -p ../ready_to_pack
           cp bin/targets/amlogic/meson/*.tar.gz ../ready_to_pack/rootfs.tar.gz
 
-      - name: 打包为 U 盘镜像 (Ophub 核心步骤)
+      - name: 封装为盒子启动镜像 (Ophub 打包)
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: ready_to_pack/rootfs.tar.gz
@@ -82,17 +118,19 @@ jobs:
           openwrt_kernel: 6.6.y
           auto_generate_kernel: v6.6.y
 
-      - name: 整理并上传固件
+      - name: 整理产物
         run: |
           mkdir -p firmware
-          # 查找打包好的 img.gz 文件并移动
+          # 寻找打包好的 img.gz 文件并移动
           find out/ -name "*.img.gz" -exec mv {} firmware/ \;
           cd firmware
-          # 重命名一下方便识别
-          for f in *.img.gz; do mv "$f" "OpenWrt_${{ github.event.inputs.luci_version }}_HK1Box_S905X3.img.gz"; done
+          # 重命名文件，方便识别
+          for f in *.img.gz; do 
+            mv "$f" "OpenWrt_${{ github.event.inputs.luci_version }}_HK1Box_S905X3_$(date +%Y%m%d).img.gz"
+          done
 
-      - name: 上传 Artifact
+      - name: 上传固件 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HK1Box-OpenWrt-Image
+          name: HK1Box-OpenWrt-USB-Image
           path: firmware/*
