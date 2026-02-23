@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       firmware_size:
-        description: '固件大小 (MB)'
+        description: '固件大小 (MB) [若选 Rootfs 则此项无效]'
         required: true
         default: '1024'
         type: choice
