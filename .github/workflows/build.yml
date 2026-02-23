@@ -6,12 +6,11 @@ on:
       build_type:
         description: '固件构建类型'
         required: true
-        default: 'squashfs_ext4 (物理机/通用)'
+        default: 'squashfs_ext4'
         type: choice
         options:
-          - 'squashfs_ext4 (物理机/通用)'
-          - 'iso (虚拟机/光盘)'
-          - 'rootfs (容器/LXC)'
+          - 'squashfs_ext4'
+          - 'rootfs'
       luci_version:
         description: 'OpenWrt 版本'
         required: true
@@ -48,6 +47,11 @@ on:
         required: false
         type: boolean
         default: false
+      enable_iso:
+        description: '生成 ISO 格式固件 (虚拟机/CD启动)'
+        required: false
+        type: boolean
+        default: false
       enable_pppoe:
         description: '启用 PPPoE 拨号配置'
         required: false
@@ -74,7 +78,7 @@ jobs:
       - name: 初始化构建环境
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-setuptools python3-pyelftools zstd genisoimage xorriso mtools
+          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-setuptools python3-pyelftools zstd genisoimage
 
       - name: 获取 OpenWrt 版本
         id: get_version
@@ -121,6 +125,7 @@ jobs:
           FIRMWARE_SIZE: ${{ github.event.inputs.firmware_size }}
           ENABLE_STORE: ${{ github.event.inputs.enable_store }}
           ENABLE_DOCKER: ${{ github.event.inputs.enable_docker }}
+          ENABLE_ISO: ${{ github.event.inputs.enable_iso }}
           BUILD_TYPE: ${{ github.event.inputs.build_type }}
           ENABLE_PPPOE: ${{ github.event.inputs.enable_pppoe }}
           PPPOE_USER: ${{ github.event.inputs.pppoe_user }}
@@ -135,7 +140,7 @@ jobs:
           chmod +x ../scripts/*.sh
           ../scripts/set_ip.sh
           
-          if [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
+          if [ "${BUILD_TYPE}" == "rootfs" ]; then
               echo "Rootfs mode, skipping partition size setting."
           else
               ../scripts/set_partition.sh
@@ -176,17 +181,27 @@ jobs:
           [ -f .config ] || touch .config
           
           # === 配置构建类型 ===
-          # 根据选择的构建类型，加载对应的配置文件
-          
-          # 1. 复制基础配置
-          # 注意：ImageBuilder 自带 .config，我们应该追加而不是覆盖
-          # cp ../config/base.config .config  <-- 错误做法，会覆盖掉内核版本信息
-          cat ../config/base.config >> .config
-          
-          # 2. 仅在 ISO 模式下启用 ISO 选项
-          if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
-             echo "Enabling ISO images..."
+          # 清理默认设置，避免冲突
+          sed -i '/CONFIG_TARGET_ROOTFS_TARGZ/d' .config
+          sed -i '/CONFIG_TARGET_ROOTFS_SQUASHFS/d' .config
+          sed -i '/CONFIG_TARGET_ROOTFS_EXT4FS/d' .config
+          sed -i '/CONFIG_ISO_IMAGES/d' .config
+
+          if [ "${BUILD_TYPE}" == "squashfs_ext4" ]; then
+             echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+             echo "CONFIG_TARGET_ROOTFS_EXT4FS=y" >> .config
+             echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
+          elif [ "${BUILD_TYPE}" == "rootfs" ]; then
+             echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+             echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
+             echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
+          fi
+
+          # ISO 生成支持 (可选)
+          if [ "${ENABLE_ISO}" == "true" ]; then
              echo "CONFIG_ISO_IMAGES=y" >> .config
+          else
+             echo "# CONFIG_ISO_IMAGES is not set" >> .config
           fi
           
           # 读取自定义包
@@ -203,15 +218,14 @@ jobs:
         run: |
           mkdir -p firmware
           
-          if [[ "${BUILD_TYPE}" == *"iso"* ]]; then
+          if [ "${ENABLE_ISO}" == "true" ]; then
              echo "ISO 模式已启用，仅保留 ISO 文件..."
              find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
-          elif [[ "${BUILD_TYPE}" == *"squashfs_ext4"* ]]; then
+          else
              echo "常规模式，保留 img.gz 文件..."
-             # 保留所有 img.gz 文件，但排除 rootfs.img.gz
-             find openwrt-ib/bin/targets/x86/64 -name "*.img.gz" ! -name "*rootfs.img.gz" -exec cp {} firmware/ \;
-          elif [[ "${BUILD_TYPE}" == *"rootfs"* ]]; then
-             echo "Rootfs 模式，保留 tar.gz 文件..."
+             # 排除 rootfs.img.gz (非 combined 镜像)
+             find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
+             # 如果是 rootfs 模式，保留 tar.gz
              find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
           fi
           
