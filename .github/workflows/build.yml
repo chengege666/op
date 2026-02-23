@@ -135,6 +135,7 @@ jobs:
              echo "Using custom firmware size: ${CUSTOM_FIRMWARE_SIZE}"
              export FIRMWARE_SIZE="${CUSTOM_FIRMWARE_SIZE}"
           fi
+          echo "FIRMWARE_SIZE=$FIRMWARE_SIZE" >> $GITHUB_ENV
           
           mkdir -p files/etc/uci-defaults
           mkdir -p keys
@@ -269,7 +270,10 @@ jobs:
             OpenWrt x86_64 固件
             版本: ${{ env.VERSION }}
             类型: ${{ github.event.inputs.build_type }}
-            IP: ${{ github.event.inputs.lan_ip }}
+            管理地址: ${{ github.event.inputs.lan_ip }}
+            用户名: root
+            密码: (无)
+            固件大小: ${{ env.FIRMWARE_SIZE }}MB
           files: firmware/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
