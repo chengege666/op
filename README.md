@@ -50,11 +50,15 @@ https://github.com/chengege666/pvezh
 
 ## 📦 构建产物
 
-构建完成后，在 Workflow 运行记录页面的 **Artifacts** 区域可以下载生成的固件包：
+构建完成后，在 Workflow 运行记录页面的 **Artifacts** 区域可以下载生成的固件包 (`OpenWrt_x86_64_Firmware.zip`)。下载并解压 zip 包后，根据你选择的构建类型，会包含以下文件：
 
-*   **文件名格式**: `OpenWrt_Firmware_[版本]_[大小]MB.zip`
-*   **包含文件**: 解压后通常包含 `.img.gz` (gzip 压缩镜像) 和 `.img` (原始镜像)。
-*   **使用方法**: 解压后使用写盘工具 (如 Rufus, BalenaEtcher) 写入软路由硬盘或虚拟机虚拟磁盘即可。
+*   **squashfs-combined-efi.img.gz**: (常见) 物理机/虚拟机用。**需要再次解压** 得到 `.img` 文件后，方可写入硬盘或转换为虚拟磁盘。
+*   **ext4-combined-efi.img.gz**: (少见) 物理机/虚拟机用。**需要再次解压** 得到 `.img` 文件。
+*   **rootfs.tar.gz**: (容器) LXC/Docker 用。**不需要解压**，直接作为模板文件使用。
+*   **openwrt-x86-64-generic-iso-combined-efi.iso**: (光盘镜像) 虚拟机/CD-ROM 用。**不需要解压**，直接挂载使用。
+
+> **提示**: 推荐使用 [PVE 镜像转换工具 (pvezh)](https://github.com/chengege666/pvezh) 自动处理解压和导入，省去手动操作烦恼。
+
 
 ## 🛠️ 项目结构
 
