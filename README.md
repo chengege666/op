@@ -45,6 +45,9 @@
     *   **注意**: 本固件适配 **OpBoot** (支持 128M 分区)。刷机前请确保已刷入 OpBoot。
 5.  开始构建。
 
+配合pve转换工具使用更佳
+https://github.com/chengege666/pvezh
+
 ## 📦 构建产物
 
 构建完成后，在 Workflow 运行记录页面的 **Artifacts** 区域可以下载生成的固件包：
