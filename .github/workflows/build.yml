@@ -218,7 +218,8 @@ jobs:
         run: |
           mkdir -p firmware
           # 仅复制 img.gz 和 iso 文件
-          find openwrt-ib/bin/targets/x86/64 -name "*.img.gz" -exec cp {} firmware/ \;
+          # 排除 rootfs.img.gz (非 combined 镜像)
+          find openwrt-ib/bin/targets/x86/64 -name "*-combined-*.img.gz" -exec cp {} firmware/ \;
           find openwrt-ib/bin/targets/x86/64 -name "*.iso" -exec cp {} firmware/ \;
           find openwrt-ib/bin/targets/x86/64 -name "*.tar.gz" -exec cp {} firmware/ \;
           
