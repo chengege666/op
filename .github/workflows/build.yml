@@ -10,7 +10,7 @@ on:
         type: choice
         options:
           - 'squashfs_ext4 (物理机/通用)'
-          - 'iso (虚拟机/光盘)'
+          - 'iso (虚拟机/光盘不支持修改IP)'
           - 'rootfs (容器/LXC)'
       luci_version:
         description: 'OpenWrt 版本'
