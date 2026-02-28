@@ -19,6 +19,8 @@ on:
         type: choice
         options:
           - '24.10.5'
+          - '24.10.4'
+          - '24.10.3'
           - 'SNAPSHOT'
       auto_release:
         description: '构建成功后是否自动发布到 GitHub Release'

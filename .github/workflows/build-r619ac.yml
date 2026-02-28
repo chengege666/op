@@ -14,6 +14,8 @@ on:
         type: choice
         options:
           - '24.10.5'
+          - '24.10.4'
+          - '24.10.3'
           - 'SNAPSHOT'
       enable_store:
         description: '启用应用商店 (iStore)'
