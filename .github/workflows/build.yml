@@ -1,3 +1,4 @@
+--- START OF FILE build.yml ---
 name: 构建 OpenWrt x86_64 (Image Builder)
 
 on:
@@ -15,9 +16,10 @@ on:
       luci_version:
         description: 'OpenWrt 版本'
         required: true
-        default: '24.10.5'
+        default: '25.12.0'
         type: choice
         options:
+          - '25.12.0'
           - '24.10.5'
           - '24.10.4'
           - '24.10.3'
