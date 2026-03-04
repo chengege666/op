@@ -207,7 +207,20 @@ jobs:
       - name: 生成固件
         working-directory: ./immortalwrt-ib
         run: |
-          make image PACKAGES="$PACKAGES" FILES="files"
+          echo "=== 开始构建固件 ==="
+          echo "PACKAGES: $PACKAGES"
+          echo ""
+          echo "=== .config 内容 ==="
+          cat .config || true
+          echo ""
+          echo "=== 开始执行 make image ==="
+          make image PACKAGES="$PACKAGES" FILES="files" V=s 2>&1 | tee /tmp/build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "=== 构建失败，显示最后 100 行日志 ==="
+            tail -n 100 /tmp/build.log
+            exit $BUILD_STATUS
+          fi
 
       - name: 整理构建产物
         env:
