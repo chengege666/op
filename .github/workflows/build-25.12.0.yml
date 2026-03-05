@@ -20,6 +20,11 @@ on:
         description: '路由器管理地址 (LAN IP)'
         required: true
         default: '192.168.1.1'
+      auto_release:
+        description: '构建成功后是否自动发布到 GitHub Release'
+        required: false
+        type: boolean
+        default: false
 
 env:
   VERSION: '25.12.0'
@@ -142,8 +147,26 @@ jobs:
           cd firmware
           ls -lh
 
-      - name: 上传固件
+      - name: 上传固件 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: OpenWrt-25.12.0-Firmware
           path: firmware/*
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: github.event.inputs.auto_release == 'true'
+        with:
+          tag_name: v${{ env.VERSION }}-${{ github.run_id }}
+          name: OpenWrt ${{ env.VERSION }} x86_64
+          body: |
+            OpenWrt x86_64 固件
+            版本: ${{ env.VERSION }}
+            类型: ${{ github.event.inputs.build_type }}
+            管理地址: ${{ github.event.inputs.lan_ip }}
+            用户名: root
+            密码: (无)
+            固件大小: ${{ env.FIRMWARE_SIZE }}MB
+          files: firmware/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
