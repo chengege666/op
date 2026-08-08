@@ -14,9 +14,10 @@ on:
       luci_version:
         description: 'OpenWrt 版本'
         required: true
-        default: '24.10.7'
+        default: '24.10.8'
         type: choice
         options:
+          - '24.10.8'
           - '24.10.7'
           - '24.10.6'
           - 'SNAPSHOT'
